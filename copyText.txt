@@ -1,0 +1,377 @@
+1.
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<fcntl.h>
+#include<string.h>
+#include<errno.h>
+int main(){
+        int fd;
+        fd = open("file1",O_RDWR | O_CREAT,S_IRWXU);
+        if(fd < 0){
+                perror("open:");
+                printf("errno is %d",errno);
+        }
+        int writeNum;
+        char str1[] = "abcdefghijklmn";
+        writeNum = write(fd,str1,14);
+        if(writeNum != 14){
+                perror("Write Error\n");
+        }
+        else{
+                printf("Write OK\n");
+        }
+        close(fd);
+        return 0;
+}
+
+#include<sys/stat.h>
+#include<unistd.h>
+#include<errno.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<fcntl.h>
+#include<string.h>
+int main(){
+            int fd;
+            fd = open("file2",O_RDWR | O_CREAT,S_IRWXU);
+            if(fd < 0){
+                    perror("open:");
+                    printf("Write Error: %d",errno);
+            }
+            int writeNum;
+            char str2[] = "ABCDEFGHIJKLMN";
+            writeNum = write(fd,str2,14);
+            if(writeNum != 14){
+                    perror("Write Error\n");
+            }
+            else{
+                    printf("Write OK\n");
+            }
+            close(fd);
+            return 0;
+}
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<errno.h>
+#include<fcntl.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+int main(){
+        int readfd;
+        readfd = open("file1",O_RDONLY);
+        if( readfd < 0 ){
+                perror("open : ");
+                printf("Write Error : %d",errno);
+        }
+        int readNum;
+        char str3[14];
+        readNum = read(readfd,str3,14);
+        if( readNum != 14){
+                printf("Read File1 Error\n");
+        }
+        else{
+                printf("Read File1 OK\n");
+
+	}
+        int writefd,writeNum1,writeNum2;
+        writefd = open("file2",O_RDWR);
+        if( writefd < 0 ){
+                perror("open:");
+                printf("write Error: %d",errno);
+        }
+        char str4[14];
+        writeNum2 = read(writefd,str4,14);
+        if(writeNum2 != 14){
+                printf("Read File2 Error\n");
+        }
+        else{
+                printf("Read File2 OK\n");
+        }
+
+        lseek(writefd,0,SEEK_SET);
+        writeNum1 = write(writefd,str3,14);
+        if(writeNum1 != 14 ){
+                printf("Write1 Error\n");
+        }
+        else{
+	printf("Write1 OK\n");
+        }
+        lseek(writefd,0,SEEK_END);
+        writeNum2 = write(writefd,str4,14);
+        if(writeNum2 != 14){
+                printf("Write2 Error\n");
+        }
+        else{
+                printf("Write2 OK\n");
+        }
+        close(writefd);
+        close(readfd);
+        return 0;
+}
+
+
+
+2
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+int main(){
+        int fd;
+        fd = open("file4",O_RDWR | O_CREAT,S_IRWXU);
+        if(fd < 0 ){
+                perror("open:");
+                printf("Open Error:%d",errno);
+        }
+        int fdcopy,t;
+        t= dup2(fd,fdcopy);
+        if(t==-1){
+                printf("dup Copy Error\n");
+        }
+        else{
+                printf("dup Copy OK\n");
+        }
+        int writeNum;
+        char str3[11] = "class_name";
+        writeNum = write(fdcopy,str3,11);
+        if(writeNum != 11){
+                printf("Write File Error\n");
+        }
+        else{
+                printf("Write File OK\n");
+        }
+
+        lseek(fdcopy,0,SEEK_SET);
+        int readNum;
+	char str4[11];
+        readNum = read(fd,str4,11);
+        if(readNum != 11){
+                printf("Read File Error\n");
+        }
+        else{
+                printf("Read Fiel OK: %s\n",str4);
+        }
+        return 0;
+}
+
+
+3.
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<errno.h>
+#include<fcntl.h>
+int main(int argc,char *argv[]){
+        struct stat statBuf;
+        char *ptr;
+        for(int i=1;i<argc;++i){
+                if(lstat(argv[i],&statBuf)<0){
+                        perror("lstat:");
+                }
+                if(S_ISREG(statBuf.st_mode)){
+                        ptr = "regular file\n";
+                }
+                else if(S_ISDIR(statBuf.st_mode)){
+                        ptr = "directory file\n";
+                }
+                else if(S_ISCHR(statBuf.st_mode)){
+                        ptr = "char device file\n";
+                }
+                else if(S_ISBLK(statBuf.st_mode)){
+                        ptr = "block device file\n";
+                }
+                else if(S_ISFIFO(statBuf.st_mode)){
+                        ptr = "FIFO file\n";
+                }
+                else if(S_ISLNK(statBuf.st_mode)){
+                        ptr = "link file\n";
+                }
+                else if(S_ISSOCK(statBuf.st_mode)){
+                        ptr = "socket file\n";
+                }
+		}
+                printf("%s is %s",argv[i],ptr);
+
+                if(statBuf.st_mode&S_IRWXU){
+                        printf("readable, writable and executable by owner\n");
+                }
+                else{
+                        if(statBuf.st_mode&S_IRUSR){
+                                printf("readable by owner\n");
+                                if(statBuf.st_mode&S_IWUSR){
+                                        printf("writable by owner\n");
+                                }
+                                else if(statBuf.st_mode&S_IXUSR){
+                                        printf("executable by owner\n");
+                                }                       }                                                                                                                                                       				else if(statBuf.st_mode&S_IWUSR){
+                                        printf("writable by owner\n");
+                                        if(statBuf.st_mode&S_IXUSR){
+                                        printf("executable by owner\n");
+                                }
+                        }
+                }
+                int nodeNum = statBuf.st_ino;
+		int countNum = statBuf.st_nlink;
+                int usrID = statBuf.st_uid,grpID = statBuf.st_gid;
+                int size = statBuf.st_size;
+                printf("%s's node is %d\n",argv[i],nodeNum);
+                printf("%s's count is %d\n",argv[i],countNum);
+                printf("%s's userID is %d\n",argv[i],usrID);
+                printf("%s's groupID is %d\n",argv[i],grpID);
+                printf("%s's size is %d\n",argv[i],size);
+                if(chmod(argv[i],S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | (statBuf.st_mode &~S_IROTH))<0){
+                        printf("chmod error\n");
+                }
+                else{
+                        printf("chmod ok\n");
+                }
+        }
+        return 0;
+}
+
+
+
+4.
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<fcntl.h>
+#include<unistd.h>
+#include<errno.h>
+#include<stdio.h>
+#include<stdlib.h>
+int main(int argc,char *argv[]){
+        umask(0);
+        if(creat("testfile",S_IRUSR | S_IWUSR | S_IRGRP)<0){
+                perror("create file:");
+        }
+        else{
+                printf("create file OK\n\n");
+        }
+        struct stat statBuf;
+        if(link("testfile","testfile1")<0){
+                perror("create link file error");
+        }
+        else{
+                printf("create link file OK\n");
+
+        }
+        lstat("testfile1",&statBuf);
+        int inode1 = statBuf.st_ino;
+        int size1 = statBuf.st_size;
+        printf("link file's inode is %d\n",inode1);
+        printf("link file's size is %d\n\n",size1);
+        if(symlink("testfile","testfile2")<0){
+                perror("create symlink file error");
+        }
+        else{
+                printf("create symlink file OK\n");
+        }
+        lstat("testfile2",&statBuf);
+        int inode2 = statBuf.st_ino;
+        int size2 = statBuf.st_size;
+        printf("symlink file's inode is %d\n",inode2);
+        printf("symlink file's size is %d\n",size2);
+        char buff[256];
+        readlink("testfile2",buff,256);
+	printf("file context is %s\n\n",buff);
+
+        stat("testfile",&statBuf);
+        int inode = statBuf.st_ino;
+        int size = statBuf.st_size;
+        int count = statBuf.st_nlink;
+        printf("source file's inode is %d\n",inode);
+        printf("source file's size is %d\n",size);
+        printf("source file's link count is %d\n",count);
+        if(unlink("testfile")<0){
+                perror("unlink source file: ");
+        }
+        stat("testfile",&statBuf);
+        int linkNum = statBuf.st_nlink;
+        printf("after unlink source file,link number is:%d\n",linkNum);
+        return 0;
+}
+
+
+
+
+5.
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+
+int main(int argc,char *argv[]){
+    if(mkdir("/home/user",666)<0){
+        perror("mkdir ");
+    }
+    chdir("/home/user");
+    char *path = (char*)malloc(256*sizeof(char));
+    getcwd(path,256);
+    printf("Path: %s\n",path);
+    free(path);
+    return 0;
+}
+
+
+
+6.
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<unistd.h>
+#include<dirent.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+void openDir(char *path,int depth){
+    DIR *dir;
+    struct dirent *dirBuf;
+    struct stat statBuf;
+    if((dir = opendir(path))==NULL){
+        perror("opendir ");
+    }
+    chdir(path);
+    while((dirBuf = readdir(dir))!=NULL){
+
+        lstat(dirBuf->d_name,&statBuf);
+        if(S_IFDIR & statBuf.st_mode){
+
+            if(strcmp(dirBuf->d_name,".")==0 || strcmp("..",dirBuf->d_name)==0){
+                continue;
+            }
+            printf("directory name :%s inode :%d\n",dirBuf->d_name,(int)dirBuf->d_ino);
+            openDir(dirBuf->d_name,depth+4);
+        }
+        else{
+            printf("%d%s",depth,dirBuf->d_name);
+
+        }
+    }
+    chdir("..");
+    closedir(dir);
+}
+int main(){
+    char *path = (char*)malloc(56*sizeof(char));
+    path = "/home";
+    openDir(path,0);
+    free(path);
+    return 0;
+}
+
+
