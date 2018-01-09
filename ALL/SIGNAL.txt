@@ -1,0 +1,546 @@
+#include<sys/types.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<errno.h>
+#include<stdio.h>
+#include<signal.h>
+#include<wait.h>
+void sig_usr(int sig){
+    if(sig==SIGUSR1){
+        printf("recieve SIGUSR1\n");
+    }
+    else{
+        printf("Undeclared signal %d\n",sig);
+    }
+}
+int main(){
+    int fk;
+    int pid,status;
+    int ret_val;
+    fk = fork();
+    pid = getpid();
+    if(fk<0){
+        perror("fork() ");
+        exit(EXIT_FAILURE);
+    }
+
+    else if(fk==0){
+        ret_val = kill(getppid(),SIGUSR1);
+        if(ret_val==0){
+            printf("send OK\n");
+        }
+        else{
+            printf("send Error\n");
+        }
+        exit(EXIT_SUCCESS);
+    }
+    else{
+        signal(SIGUSR1,sig_usr);
+        sleep(2);
+    }
+
+    return 0;
+}
+
+
+
+
+
+#include<sys/time.h>
+#include<sys/types.h>
+#include<errno.h>
+#include<wait.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<signal.h>
+#include<unistd.h>
+void signalHandler(int sig){
+    switch(sig){
+        case SIGALRM:
+            printf("Caught [ __SIGALRM__ ]\n");
+            break;
+        case SIGVTALRM:
+            printf("Caught ( *SIGVTALRM* )\n");
+            break;
+        case SIGPROF:
+            printf("Caught {  ~SIGPROF~  }\n");
+            break;
+        default:
+            printf("Error signal\n");
+            break;
+    }
+}
+
+
+int main(int argc,char *argv[]){
+    int fk1,fk2,fk3;
+    if((fk1=fork())<0){
+        perror("fork fk1:");
+        exit(-1);
+    }
+    else if(fk1==0){
+        struct itimerval val;
+        val.it_value.tv_sec = 0;
+        val.it_value.tv_usec = 530000;
+        val.it_interval.tv_sec = 0;
+        val.it_interval.tv_usec = 350000;
+        setitimer(ITIMER_REAL,&val,NULL);
+    }
+        
+    if((fk2 = fork())<0){
+        perror("fork fk2:");
+        exit(-1);
+    } 
+    else if(fk2 == 0){
+        struct itimerval val;
+        val.it_value.tv_sec = 0;
+        val.it_value.tv_usec = 370000;
+        val.it_interval.tv_sec = 0;
+        val.it_interval.tv_usec = 300000;
+        setitimer(ITIMER_VIRTUAL,&val,NULL);
+    }
+            
+    if((fk3 = fork())<0){
+        perror("fork fk3:");
+        exit(-1);
+    }
+    else if(fk3 == 0){
+        struct itimerval val;
+        val.it_value.tv_sec = 0;
+        val.it_value.tv_usec = 350000;
+        val.it_interval.tv_sec = 0;
+        val.it_interval.tv_usec = 250000;
+        setitimer(ITIMER_PROF,&val,NULL);
+    }
+
+    signal(SIGALRM,signalHandler);
+    signal(SIGVTALRM,signalHandler);
+    signal(SIGPROF,signalHandler);
+    while(1);
+    return 0;
+}
+
+
+
+
+
+#include<sys/types.h>
+#include<stdlib.h>
+#include<fcntl.h>
+#include<stdio.h>
+#include<signal.h>
+#include<sys/time.h>
+#include<unistd.h>
+#include<errno.h>
+void _sigaction(int sig,siginfo_t *info,void *p)
+{
+    if(sig==SIGUSR1){
+        printf("recieve SIGUSR1\n");
+    }
+    else{
+        printf("error SIGNAL\n");
+    
+    }
+    
+}
+int main(){
+    struct sigaction act,oldact;
+    act.sa_sigaction = _sigaction;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGUSR1,&act,&oldact);
+    int fk;
+    if((fk=fork())<0){
+        perror("fork() ");
+        exit(-1);
+    }
+    else if(fk==0){
+        union sigval mysigval;        
+        if(sigqueue(getppid(),SIGUSR1,mysigval)==-1){
+            printf("send Error\n");
+        }
+        else{
+            printf("send OK\n");
+        }
+        exit(0);
+    }
+    else{
+    
+        sleep(2);
+        printf("recieve OK\n");
+    }
+    return 0;
+}
+
+
+
+
+
+#include<sys/types.h>
+#include<sys/time.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<errno.h>
+#include<unistd.h>
+#include<signal.h>
+void _sigaction(int sig,siginfo_t *info,void *p){
+    if(sig==SIGUSR1){
+        printf("the signal is SIGUSR1\n");
+    }
+    printf("sender pid: %d\n",info->si_pid);
+    printf("sender uid: %d\n",info->si_uid);
+}
+int main(){
+    struct sigaction act,oldact;
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = _sigaction;
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGUSR1,&act,&oldact);
+    int fk;
+    if((fk=fork())<0){
+        perror("fork ");
+        exit(-1);
+    }
+    else if(fk==0){
+        union sigval mysigval;
+        if((sigqueue(getppid(),SIGUSR1,mysigval))==-1){
+            printf("send Error\n");
+        }
+        else{
+            printf("send OK\n");
+        }
+        exit(0);
+    }
+    else{
+        sleep(2);
+        printf("recieve OK\n");
+    }
+
+    return 0;
+}
+
+
+
+
+
+#include<sys/types.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<errno.h>
+#include<sys/time.h>
+#include<signal.h>
+#include<unistd.h>
+void _sigaction(int sig,siginfo_t *info,void *p){
+    if(sig==SIGUSR1){
+        printf("the signal is: SIGUSR1\n");
+    }
+    printf("the value is: %d\n",info->si_value.sival_int);
+}
+int main(int argc,char *argv[]){
+    struct sigaction act,oldact;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = SA_SIGINFO;
+    act.sa_sigaction = _sigaction;
+    sigaction(SIGUSR1,&act,&oldact);
+    int fk;
+    if((fk=fork())<0){
+        perror("fork ");
+        exit(-1);
+    }
+    else if(fk==0){
+        union sigval mysigval;
+        mysigval.sival_int = 20;
+        if(sigqueue(getppid(),SIGUSR1,mysigval)==-1){
+            printf("send Error\n");
+        }
+        else{
+            printf("send OK\n");
+        }
+    
+    }
+    else{
+        sleep(2);
+        printf("recieve OK\n");
+        exit(0);
+    }
+
+    return 0;
+}
+
+
+
+
+
+
+#include<sys/types.h>
+#include<sys/time.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<signal.h>
+#include<unistd.h>
+#include<errno.h>
+void _sigaction(int sig,siginfo_t *info,void *p){
+    if(sig==SIGUSR1){
+        printf("the signal is: SIGUSR1\n");
+    }
+    printf("the string is: %s\n",(char*)info->si_value.sival_ptr);
+}
+
+int main(int argc,char *argv[]){
+    struct sigaction act,oldact;
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = _sigaction;
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGUSR1,&act,&oldact);
+    int fk;
+    if((fk=fork())<0){
+        printf("fork ");
+        exit(-1);
+    }
+    else if(fk==0){
+        union sigval mysigval;
+        mysigval.sival_ptr = "Hello World";
+        if((sigqueue(getppid(),SIGUSR1,mysigval))==-1){
+            printf("send Error\n");
+        }
+        else{
+            printf("send OK\n");
+        }
+    }
+    else{
+        sleep(2);
+        printf("recieve OK\n");
+        exit(0);
+    }
+    return 0;
+}
+
+
+
+
+#include<sys/types.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<errno.h>
+#include<unistd.h>
+#include<string.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
+#define BUFSZ 2048
+int main(){
+    int fk;
+	int i=0;
+    int shmid,tmp_mid;
+    char *shm_write;
+    char *shm_read;
+    key_t key;
+    key = ftok("file1",43);
+    if((shmid=shmget(key,BUFSZ,IPC_CREAT | 0666))==-1){
+        perror("shmget:");
+        exit(-1);
+    }
+    else{
+        printf("shmget OK\n");
+    }
+
+    if((shm_write=shmat(shmid,0,0))==(void*)-1){
+        perror("shmat write:");
+        exit(-1);
+    }
+    else{
+        printf("parent shmat OK\n");
+    }
+
+    char *write1 = "hello world";
+    char *write2 = "end";
+    
+	if((fk=fork())==-1){
+        perror("fork fk:");
+        exit(-1);
+    }
+    else if(fk==0){
+	sleep(1);
+        tmp_mid = shmget(key,BUFSZ,IPC_CREAT | 0666);
+        if((shm_read=shmat(tmp_mid,0,0))==(void*)-1){
+            perror("shmat read:");
+            exit(-1);
+        }
+        while(strcmp(shm_read,"end")!=0){
+			printf("read%d: %s\n",i,shm_read);
+			sleep(2);
+        }
+		sleep(1);
+        if((shmdt(shm_read))==-1){
+            perror("shmdt:");
+            exit(-1);
+        }
+        else{
+            printf("child process detached\n");
+            exit(0);
+        }
+    }
+    else{
+		i=0;
+		while(i<2){
+			sprintf(shm_write,"%s",write1);
+			printf("write%d: %s\n",i,shm_write);
+			++i;
+			sleep(2);
+		}
+		sprintf(shm_write,"%s",write2);
+        printf("%s\n",shm_write);
+		sleep(3);
+		if((shmdt(shm_write))==-1){
+            perror("parent process detached error:\n");
+        }
+        else{
+            printf("parent process been detached\n");
+        }
+    }
+    return 0;
+}
+
+
+
+
+
+
+#include<sys/types.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<errno.h>
+#include<sys/ipc.h>
+#include<sys/msg.h>
+#include<string.h>
+int main(){
+    int fk;
+    int qid;
+    int lenth;
+    char msg[256] = "hello world";
+    lenth = strlen(msg);
+    key_t key;
+    key = ftok("file2",30);
+    if((qid=msgget(key,IPC_CREAT | 0666))==-1){
+        perror("parent msgget:");
+        exit(-1);
+    }
+    printf("parent msgget OK\n");
+    if((msgsnd(qid,&msg,lenth,IPC_NOWAIT))==-1){
+        perror("parent msgsnd:");
+        exit(-1);
+    }else{
+        printf("parent send OK\n");
+    }
+
+    if((fk = fork())==-1){
+        perror("fork:");
+        exit(-1);
+    }
+    else if(fk==0){
+        int len;
+		if(( qid = msgget(key,IPC_CREAT | 0666))==-1){
+            perror("child msgget:");
+            exit(-1);
+        }
+        else{
+            printf("child msgget OK\n");
+        }
+        len = msgrcv(qid,&msg,4096,0,IPC_NOWAIT);
+        if(len>0){
+            printf("massage is: %s\n",msg);
+        }
+        else if(len==0){
+            printf("no massage\n");
+        }
+        else{
+            perror("child msgrcv:");
+            exit(-1);
+        }
+    }
+    else{
+        system("ipcs -q");
+        exit(0);
+    }
+    return 0;
+}
+
+
+
+
+
+
+#include<sys/msg.h>
+#include<sys/types.h>
+#include<sys/ipc.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<unistd.h>
+#include<sys/sem.h>
+union semun{
+	int val;
+	struct semid_ds *buf;
+	unsigned short int *array;
+	struct seminfo *info;
+};
+int main(){
+	int fk;
+	int semid;
+	key_t key;
+	key = ftok(".",3);
+	semid=semget(key,1,IPC_CREAT | 0666);
+	if(semid==-1){
+		perror("parent semget:");
+		exit(-1);
+	}
+	
+	struct sembuf sbuf = {0,-1,IPC_NOWAIT};
+	union semun semopts;
+	semopts.val = 5;
+	if((semctl(semid,0,SETVAL,semopts))==-1){
+		perror("parent semctl:");
+		exit(-1);
+	}
+
+
+	if((fk=fork())==-1){
+		perror("fork");
+		exit(-1);
+	}
+
+	else if(fk==0){
+		semid = semget(key,1,IPC_CREAT | 0666);
+		if(semid==-1){
+			perror("child semget:");
+			exit(-1);
+		}
+		int semval;
+		
+		while(1){
+			if((semval=semctl(semid,0,GETVAL,0))==-1){
+				perror("child semctl:");
+				exit(-1);
+			}
+			if(semval>0){
+				printf("semval is: %d\n",semval);
+			}
+			else{
+				printf("stop\n");
+				break;
+			}
+			sleep(1);
+		}
+	}
+
+	else{
+		while(1){
+			if(semop(semid,&sbuf,1)==-1){
+				break;
+			}
+			sleep(1);
+		}
+		sleep(3);
+	}
+	return 0;
+}

@@ -1,0 +1,209 @@
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<errno.h>
+#include<unistd.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<fcntl.h>
+#include<limits.h>
+#include<wait.h>
+int main(){
+    int fd1[2],fd2[2];
+    int fk;
+    int ret_pid,status;
+    char send[] = "hello child";
+    char response[] = "hello father";
+    char child_recieve[15],father_recieve[15];
+    if(pipe(fd1)<0){
+        perror("pipe(fd1)");
+        exit(EXIT_FAILURE);
+    }
+    if(pipe(fd2)<0){
+        perror("pipe(fd2)");
+        exit(EXIT_FAILURE);
+    }
+    fk = fork();
+    if(fk<0){
+        perror("fork()");
+        exit(EXIT_FAILURE);
+    }
+    else if(fk>0){
+        close(fd1[0]);
+        write(fd1[1],send,13);
+        close(fd1[1]);
+        sleep(1);
+        
+        close(fd2[1]);
+        read(fd2[0],father_recieve,15);
+        close(fd2[0]);
+        printf("father recieve OK,info: %s\n",father_recieve);
+        ret_pid = wait(&status);
+        printf("child exit status: %d, child pid: %d\n",status,ret_pid);
+        exit(0);
+    }
+    else{
+        close(fd1[1]);
+        read(fd1[0],child_recieve,15);
+        printf("child recieve OK,info: %s\n",child_recieve);
+        close(fd1[0]);
+        
+        close(fd2[0]);
+        write(fd2[1],response,15);
+        close(fd2[1]);
+        exit(0);
+    }
+
+
+    return 0;
+}
+
+
+
+
+
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<errno.h>
+#include<wait.h>
+#include<limits.h>
+#include<fcntl.h>
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
+int main(){
+    int fd1[2],fd2[2];
+    int status;
+    int elder_pid,younger_pid;
+    int fk1,fk2;
+    char str1[10],str2[10];
+    char elder_write[256] = "This is elder brother £¬pid is ",younger_write[256] = "This is younger brother £¬pid is ";
+    char elder_read[256],younger_read[256];
+    if(pipe(fd1)<0){
+        perror("pipe fd1:");
+        exit(EXIT_FAILURE);
+    }
+    if(pipe(fd2)<0){
+        perror("pipe fd2:");
+        exit(EXIT_FAILURE);
+    }
+    if((fk1=fork())<0){
+        perror("fork() elder:");
+        exit(EXIT_FAILURE);
+    }
+
+    else if(fk1==0){    // elder
+        /*      elder write      */
+        close(fd1[0]);
+        elder_pid = getpid();
+
+        /*sprintf(str1,"%d",elder_pid);    // int to char*
+        printf("\nstr1: %s\n",str1);
+        
+        //  link the two char*
+        strcat(elder_write,str1);      
+        printf("after link: %s\n",elder_write);*/
+
+        //  write to pipe
+        sprintf(elder_write,"%s%d",elder_write,elder_pid);
+        write(fd1[1],elder_write,sizeof(elder_write));
+        close(fd1[1]);
+
+        sleep(1);
+
+        /*     elder read   */
+        close(fd2[1]);
+        read(fd2[0],elder_read,256);
+        printf("elder read,info: %s\n\n",elder_read);
+        exit(0);
+    }
+
+
+    else{
+        // younger
+        sleep(1);
+        if((fk2=fork())<0){
+            perror("fork() younger:");
+            exit(EXIT_FAILURE);
+        }
+                else if(fk2==0){
+            /*      younger read     */
+            close(fd1[1]);
+            //  read from pipe
+            read(fd1[0],younger_read,256);
+            close(fd1[0]);
+            printf("\nyounger read,info: %s\n\n",younger_read);
+
+
+            /*     younger write     */
+            younger_pid = getpid();
+
+            /*
+            sprintf(str2,"%d",younger_pid);
+            printf("str2: %s\n",str2);
+            
+            strcat(younger_write,str2);
+            printf("after link: %s\n",younger_write);*/
+
+            sprintf(younger_write,"%s%d",younger_write,younger_pid);
+            close(fd2[0]);
+            write(fd2[1],younger_write,sizeof(younger_write));
+            exit(0);
+        }
+
+        else{
+            sleep(1);
+            close(fd2[1]);
+            close(fd2[0]);
+            waitpid(younger_pid,&status,1);
+            waitpid(elder_pid,&status,1);
+            exit(0);
+        }
+    }
+    return 0;
+}
+
+
+
+
+
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<errno.h>
+#include<limits.h>
+#include<wait.h>
+#include<fcntl.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(int argc,char *argv[]){
+    int fd;
+    char str[13];
+    if(argc!=2){
+        printf("Please input a parameter\n");
+        exit(EXIT_FAILURE);
+    }
+    if((mkfifo(argv[1],0666 | O_NONBLOCK))<0){
+        printf("Mkfifo error\n");
+        exit(EXIT_FAILURE);    
+    }
+    if((fd = open(argv[1],O_RDWR | O_NONBLOCK))<0){
+        perror("open pipe file");
+        exit(EXIT_FAILURE);
+    }
+    for(int i=0;i<10;++i){
+        if(write(fd,"hello world\n",13)<0){
+            perror("write");
+            exit(EXIT_FAILURE);
+        }
+    }
+    lseek(fd,0,SEEK_SET);
+    while((read(fd,str,13))>0){
+        printf("read from Pipe file: %s",str);
+    }
+    close(fd);
+    return 0;
+
+}

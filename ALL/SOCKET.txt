@@ -1,0 +1,1220 @@
+	
+		synserver.c
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<dirent.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<errno.h>
+#include<fcntl.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define max_data_size 512
+#define port 3333
+int reg_num = 0;
+int link_num = 0;
+int sub_dir = 0;
+int depth = 0;
+int sub_dir_reg = 0;
+int sub_dir_lnk = 0;
+char buff[max_data_size];
+void sub_Dir(char *path,int sockfd){
+        DIR *dir;
+        struct dirent *dirBuf;
+        struct stat statBuf;
+        if((dir = opendir(path))==NULL){
+                perror("opendir ");
+        }
+        chdir(path);
+        while((dirBuf = readdir(dir))!=NULL){
+                lstat(dirBuf->d_name,&statBuf);
+                if(S_ISDIR(statBuf.st_mode)){
+                        if(strcmp(dirBuf->d_name,".")==0 || strcmp("..",dirBuf->d_name)==0){
+                                continue;
+                        }
+                        printf("directory name :%s inode :%d\n",dirBuf->d_name,(int)dirBuf->d_ino);
+                        sub_Dir(dirBuf->d_name,sockfd);
+                }
+                else if(S_ISREG(statBuf.st_mode)){
+                        reg_num++;
+                        sub_dir_reg++;
+                        printf("file: %s, size: %ld\n",dirBuf->d_name,statBuf.st_size);
+
+                        bzero(&buff,max_data_size);
+                        sprintf(buff,"file: %s, size: %ld\n",dirBuf->d_name,statBuf.st_size);
+
+                        send(sockfd,buff,sizeof(buff),0);
+                }
+                else if(S_ISLNK(statBuf.st_mode)){
+                        sub_dir_lnk++;
+                        link_num++;
+                }
+
+        }
+        chdir("..");
+        closedir(dir);
+        depth+1;
+}
+void openDir(char *path,int sockfd){
+        DIR *dir;
+        struct dirent *dirBuf;
+        struct stat statBuf;
+        int i=0;
+        if((dir = opendir(path))==NULL){
+                perror("opendir ");
+        }
+        chdir(path);
+        while((dirBuf = readdir(dir))!=NULL){
+                lstat(dirBuf->d_name,&statBuf);
+                if(S_ISDIR(statBuf.st_mode)){
+                        if(strcmp(dirBuf->d_name,".")==0 || strcmp("..",dirBuf->d_name)==0){
+                                continue;
+                        }
+                        printf("directory name :%s inode :%d\n",dirBuf->d_name,(int)dirBuf->d_ino);
+                        sub_dir++;
+                        sub_Dir(dirBuf->d_name,sockfd);
+
+                        bzero(&buff,max_data_size);
+                        sprintf(buff,"%d th directory: %s, depth: %d, regular file count: %d, link file count: %d\n",++i,dirBuf->d_name,depth,sub_dir_reg,sub_dir_lnk);
+                        send(sockfd,buff,sizeof(buff),0);
+
+                        depth=0;
+                        sub_dir_reg=0;
+                        sub_dir_lnk=0;
+                        printf("%d th directory count complete! ! !\n",i);
+                }
+                else if(S_ISREG(statBuf.st_mode)){
+                        reg_num++;
+                        printf("file: %s, size: %ld\n",dirBuf->d_name,statBuf.st_size);
+
+                        bzero(&buff,max_data_size);
+                        sprintf(buff,"file: %s, size: %ld",dirBuf->d_name,statBuf.st_size);
+                        send(sockfd,buff,sizeof(buff),0);
+                }
+                else if(S_ISLNK(statBuf.st_mode)){
+                        link_num++;
+                }
+
+        }
+        closedir(dir);
+}
+int main(int argc,char **argv){
+        int sockfd,bytes;
+        socklen_t lenth;
+        struct sockaddr_in serv_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        serv_addr.sin_port = htons(port);
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+
+        if((connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr)))==-1){
+                perror("connect");
+                exit(-1);
+        }
+        printf("connect seccess\n");
+
+        struct stat statBuff;
+        if(lstat(argv[1],&statBuff)==-1){
+                perror("stat");
+                exit(-1);
+        }
+        if(S_ISREG(statBuff.st_mode)){
+                printf("regular file,size: %ld bytes\n",statBuff.st_size);
+                sprintf(buff,"regular file,size: %ld bytes\n",statBuff.st_size);
+                bytes = send(sockfd,buff,sizeof(buff),0);
+                if(bytes<0){
+                        printf("send to server error\n");
+                        exit(-1);
+                }
+                printf("send OK\n");
+        }
+        else if(S_ISDIR(statBuff.st_mode)){
+                openDir(argv[1],sockfd);
+                buff[max_data_size]='\0';
+                sprintf(buff,"in this directory total regular file count is: %d\n",reg_num);
+                send(sockfd,buff,sizeof(buff),0);
+
+                buff[max_data_size]='\0';
+                sprintf(buff,"in this directory total link file count is: %d\n",reg_num);
+                send(sockfd,buff,sizeof(buff),0);
+        }
+        close(sockfd);
+        return 0;
+}
+
+
+		synclient.c
+
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<dirent.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<errno.h>
+#include<fcntl.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define backlog 10
+#define port 3333
+#define max_data_size 512
+int main(int argc,char **argv){
+        struct sockaddr_in serv_addr,cli_addr;
+        int sockfd,clientfd;
+        int bytes;
+        socklen_t lenth;
+        char buff[max_data_size];
+        int retn;
+        FILE *fp;
+
+        bzero(&serv_addr,sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(port);
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd=socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket success\n");
+
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+
+        if(listen(sockfd,backlog)==-1){
+                perror("listen");
+                exit(-1);
+        }
+        printf("listen seccess\n");
+
+        lenth = sizeof(struct sockaddr);
+        if((clientfd = accept(sockfd,(struct sockaddr*)&cli_addr,&lenth))==-1){
+                perror("accept");
+                exit(-1);
+        }
+        printf("accept seccess\n");
+        printf("client IP is %s port is %d\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port));
+
+        if((fp = fopen("save.txt","w"))==NULL){
+                perror("save information");
+                exit(-1);
+        }
+        while(1){
+                bzero(&(buff),max_data_size);
+                bytes = recv(clientfd,buff,max_data_size,0);
+                if(bytes<0){
+                        printf("recieve from client");
+                }
+                else if(bytes>0){
+                        printf("recieve: %s",buff);
+
+
+                        retn  = fputs(buff,fp);
+                        /*if(retn==-1){
+                                printf("write error\n");
+                        }
+                        else{
+                                printf("write OK\n");
+                        }*/
+                }
+                else{
+                        printf("save ok\n");
+                        break;
+                }
+        }
+        fclose(fp);
+        close(clientfd);
+        close(sockfd);
+        return 0;
+}
+
+
+=========================================================================================================
+
+
+		synserver.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<sys/signal.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<wait.h>
+#include<fcntl.h>
+#include<time.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#include<errno.h>
+#define backlog 10
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,clientfd;
+        int bytes;
+        pid_t ppid,pid;
+        socklen_t lenth;
+        FILE *fp;
+        time_t time_now;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+
+        if(listen(sockfd,backlog)==-1){
+                perror("listen");
+                exit(-1);
+        }
+        printf("listen seccess\n");
+
+        while(1){
+                lenth = sizeof(struct sockaddr);
+                if((clientfd = accept(sockfd,(struct sockaddr*)&cli_addr,&lenth))==-1){
+                        perror("accept");
+                        exit(-1);
+                }
+                if((fp=fopen("log.txt","a+"))==NULL){
+                        perror("open file");
+                        exit(-1);
+                }
+                bzero(&buff,max_data_size);
+                time(&time_now);
+
+                sprintf(buff,"client IP %s, port %d time %s",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port),ctime(&time_now));
+                fputs(buff,fp);
+
+                if((ppid=fork())==-1){
+                        perror("fork");
+                        exit(-1);
+                }
+                else if(ppid==0){
+                        pid = fork();
+                        while(1){
+                                if(pid==-1){
+                                        perror("fork");
+                                        exit(-1);
+                                }
+                                else if(pid==0){
+                                        while(1){
+                                                bzero(&buff,max_data_size);
+                                                bytes = recv(clientfd,buff,max_data_size,0);
+                                                if(bytes<0){
+                                                        perror("recv from client");
+                                                        close(clientfd);
+                                                        break;
+                                                }
+                                                else if(bytes>0){
+                                                printf("client IP %s , port %d , message is: %s\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port),buff);
+                                                }
+                                                else{
+                                                        printf("\nthe other one client closed\n");
+                                                        close(clientfd);
+                                                        break;
+                                                }
+                                        }
+                                        exit(0);
+                                }
+                                else{
+                                        while(1){
+                                                bzero(&buff,max_data_size);
+						int status;
+                                                if(pid==waitpid(pid,&status,1)){
+                                                        printf("session exit\n");
+                                                        break;
+                                                }
+
+                                                printf("\nserver('quit' to exit): ");
+                                                fgets(buff,max_data_size,stdin);
+                                                if(!strncasecmp(buff,"quit",4)){
+                                                        perror("quit");
+                                                        kill(pid,SIGKILL);
+                                                        
+							bzero(&buff,max_data_size);
+                                                        sprintf(buff,"the session closed\n");
+                                                        send(clientfd,buff,sizeof(buff),0);
+
+                                                        close(clientfd);
+                                                        close(sockfd);
+                                                        break;
+                                                }
+                                                bytes = send(clientfd,buff,sizeof(buff),0);
+                                                if(bytes<0){
+                                                        perror("send to client");
+                                                        break;
+                                                }
+                                        }
+					exit(0);
+                                }
+                        }
+                }
+                else{
+                        sleep(1);
+                }
+	}
+        close(clientfd);
+        close(sockfd);
+        return 0;
+}
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<sys/signal.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<wait.h>
+#include<fcntl.h>
+#include<time.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#include<errno.h>
+#define backlog 10
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,clientfd;
+        int bytes;
+        pid_t ppid,pid;
+        socklen_t lenth;
+        FILE *fp;
+        time_t time_now;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+
+        if(listen(sockfd,backlog)==-1){
+                perror("listen");
+                exit(-1);
+        }
+        printf("listen seccess\n");
+
+        while(1){
+                lenth = sizeof(struct sockaddr);
+                if((clientfd = accept(sockfd,(struct sockaddr*)&cli_addr,&lenth))==-1){
+                        perror("accept");
+                        exit(-1);
+                }
+                printf("there is a client attached\n");
+
+                if((fp=fopen("log.txt","a+"))==NULL){
+                        perror("open file");
+                        exit(-1);
+                }
+                bzero(&buff,max_data_size);
+                time(&time_now);
+
+                sprintf(buff,"client IP %s, Port %d, Time %s",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port),ctime(&time_now));
+                fputs(buff,fp);
+
+                if((ppid=fork())==-1){
+                        perror("fork");
+                        exit(-1);
+                }
+                else if(ppid==0){
+                        pid = fork();
+                        while(1){
+                                if(pid==-1){
+                                        perror("fork");
+                                        exit(-1);
+                                }
+                                else if(pid==0){
+                                        bzero(&buff,max_data_size);
+                                        bytes = recv(clientfd,buff,max_data_size,0);
+                                        if(bytes<0){
+                                                perror("recv from client");
+                                                exit(0);
+                                        }
+                                        else if(bytes>0){
+                                                printf("client IP %s , Port %d , message is: %s\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port),buff);
+                                        }
+                                        else{
+                                                printf("\nthe other one client closed\n");
+                                                exit(0);
+                                        }
+                                }
+                                else{
+                                        bzero(&buff,max_data_size);
+                                        int status;
+                                        if(pid==waitpid(pid,&status,1)){
+                                                printf("session exit\n");
+                                                exit(0);
+                                        }
+                                        printf("\nserver('quit' to exit): ");
+                                        fgets(buff,max_data_size,stdin);
+                                        if(!strncasecmp(buff,"quit",4)){
+                                                perror("quit");                                                
+						kill(pid,SIGKILL);
+
+                                                bzero(&buff,max_data_size);
+                                                sprintf(buff,"the session closed\n");
+                                                send(clientfd,buff,sizeof(buff),0);
+
+                                                close(clientfd);
+                                                exit(0);
+                                        }
+                                        bytes = send(clientfd,buff,sizeof(buff),0);
+                                        if(bytes<0){
+                                                perror("send to client");
+                                                exit(-1);
+                                        }
+                                }
+                        }
+                }
+                else{
+                        sleep(1);
+                }
+        }
+        close(clientfd);
+        close(sockfd);
+        return 0;
+}
+
+
+		synclient.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<sys/signal.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#include<errno.h>
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,clientfd;
+        int bytes;
+        pid_t pid;
+        socklen_t lenth;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
+        serv_addr.sin_port = htons(atoi(argv[2]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+
+        if(connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("connect");
+                exit(-1);
+        }
+        printf("connect seccess\n");
+
+        if((pid = fork())==-1){
+                perror("fork");
+                exit(-1);
+        }
+        else if(pid==0){
+                while(1){
+                        bzero(&buff,max_data_size);
+                        printf("client('quit' to exit):");
+                        fgets(buff,max_data_size,stdin);
+                        if(!strncasecmp(buff,"quit",4)){
+                                perror("client closing");
+                                kill(getppid(),SIGKILL);
+                                break;
+                        }
+
+                        bytes = send(sockfd,buff,sizeof(buff),0);
+                        if(bytes<0){
+                                perror("send to server");
+                                break;
+                        }
+                }
+                close(sockfd);
+                exit(0);
+        }
+        else{
+                while(1){
+                        bzero(&buff,max_data_size);
+                        bytes = recv(sockfd,buff,max_data_size,0);
+                        if(bytes<0){
+                                perror("recieve from server");
+                                break;
+                        }
+                        else if(bytes>0){
+                                printf("server: %s",buff);
+                        }
+                        else{
+                                printf("\nthe server maybe have been closed\n");
+                                close(sockfd);
+                                break;
+                        }
+                }
+        }
+        close(sockfd);
+        return 0;
+}
+
+
+==================================================================================================
+
+
+		tcpserver.c
+
+
+#include<stdio.h>
+#include<netdb.h>
+#include<arpa/inet.h>
+#include<stdlib.h>
+#include<errno.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<string.h>
+#include<netinet/in.h>
+#include<signal.h>
+#define backlog 10
+#define max_conn_num 10
+#define max_data_size 256
+int main(int argc,char **argv){
+        struct sockaddr_in serv_addr,cli_addr;
+        int sockfd,clientfd;
+        int bytes;
+        socklen_t lenth;
+        char buff[max_data_size];
+        pid_t pid;
+
+        bzero(&serv_addr,sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd=socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket success\n");
+
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+
+        if(listen(sockfd,backlog)==-1){
+                perror("listen");
+                exit(-1);
+        }
+        printf("listen seccess\n");
+        lenth = sizeof(struct sockaddr);
+        if((clientfd = accept(sockfd,(struct sockaddr*)&cli_addr,&lenth))==-1){
+                perror("accept");
+                exit(-1);
+        }
+        printf("accept seccess\n");
+        printf("client IP is %s port is %d\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port));
+
+
+        if((pid = fork())==-1){
+                perror("fork");
+                exit(-1);
+        }
+        else if(pid==0){
+                while(1){
+                        bzero(&(buff),max_data_size);
+                        bytes = recv(clientfd,buff,max_data_size,0);
+                        if(bytes<0){
+                                perror("recieve from client");
+                                break;
+                        }
+                        else if(bytes>0){
+                                printf("client: %s",buff);
+                        }
+                        else{
+                                printf("the client maybe have been closed");
+                                break;
+
+                        }
+                }
+                close(clientfd);
+                exit(0);
+        }
+        else{
+                while(1){
+                        bzero(&(buff),max_data_size);
+                        printf("server('quit' to exit):");
+                        fgets(buff,max_data_size,stdin);
+                        if(!strncasecmp(buff,"quit",4)){
+                                printf("closing the connection. . . \n");
+                                kill(pid,SIGKILL);
+                                close(clientfd);
+                                break;
+                        }
+                        bytes = send(clientfd,buff,sizeof(buff),0);
+                        if(bytes == -1){
+                                perror("send to client");
+                                break;
+                        }
+                }
+        }
+
+        close(sockfd);
+
+        return 0;
+}
+
+
+		tcpclient.c
+
+
+#include<sys/types.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<signal.h>
+#include<stdio.h>
+#include<string.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<sys/socket.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<netdb.h>
+#define port 3333
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,bytes;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr;
+        pid_t pid;
+        struct hostent *host;
+
+        if(argc<3){
+                fprintf(stderr,"enter server ip and port\n");
+                exit(-1);
+        }
+        /*
+        if((host=gethostbyname(argv[1]))==NULL){
+                perror("host name");
+                exit(-1);
+        }       
+        */
+        if((sockfd=socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket OK\n");
+        bzero(&serv_addr,sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
+        serv_addr.sin_port = htons(atoi(argv[2]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        // INADDR_ANY recieve from any network card     
+        // inet_addr("127.0.0.1"); recieve from specific network card 
+        if((connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr)))==-1){
+                perror("connect");
+                exit(-1);
+        }
+
+        printf("connect OK\n");
+
+        if((pid=fork())==-1){
+                perror("fork");
+                exit(-1);
+        }
+        else if(pid==0){
+                while(1){
+                        bzero(&(buff),max_data_size);
+                        bytes = recv(sockfd,buff,max_data_size,0);
+                        if(bytes<0){
+                                perror("recieve from server");
+                                break;
+                        }
+                        else if(bytes>0){
+                                printf("client: %s",buff);
+                        }
+                        else{
+                                printf("the server maybe have closed\n");
+                                break;
+                        }
+                }
+                exit(0);
+        }
+        else{
+                while(1){
+                        bzero(&(buff),max_data_size);
+                        printf("client('quit' to exit):");
+                        fgets(buff,max_data_size,stdin);
+                        if(!strncasecmp(buff,"quit",4)){
+                                printf("closing the connection. . .\n");
+                                kill(pid,SIGKILL);
+                                break;
+                        }
+                        bytes = send(sockfd,buff,sizeof(buff),0);
+                        if(bytes<0){
+                                perror("send to server");
+                                break;
+                        }
+                }
+                close(sockfd);
+        }
+
+        close(sockfd);
+        return 0;
+}
+
+
+===========================================================================================
+
+
+		fserver.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define backlog 10
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,clientfd;
+        socklen_t lenth;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+        int flag;
+        int bytes;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket OK\n");
+        if((bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr)))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind OK\n");
+        if((listen(sockfd,backlog))==-1){
+                perror("listen");
+                exit(-1);
+        }
+        printf("listen OK\n");
+
+/*      if((flag=fcntl(sockfd,F_GETFL))==-1){
+                perror("fcntl F_SETFL");
+        }       
+        flag |=O_NONBLOCK;
+        if(fcntl(sockfd,F_SETFL,flag)<0){
+                perror("fcntl");
+        }
+*/
+        while(1){
+                lenth=sizeof(struct sockaddr);
+                if((clientfd = accept(sockfd,(struct sockaddr*)&cli_addr,&lenth))==-1){
+                        perror("accept");
+                        exit(-1);
+                }
+                if((bytes=recv(clientfd,buff,max_data_size,0))==-1){
+                        perror("recieve");
+                        exit(-1);
+                }
+                if(read(clientfd,buff,max_data_size)<0){
+                        perror("read");
+                        exit(-1);
+                }
+                printf("recieve from client message is %s\n",buff);
+                close(clientfd);
+                exit(1);
+        }
+
+        return 0;
+}
+
+
+
+		fclient.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define backlog 10
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,clientfd;
+        socklen_t lenth;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+        int flag;
+        int bytes;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
+        serv_addr.sin_port = htons(atoi(argv[2]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_STREAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket OK\n");
+        if((connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr)))==-1){
+                perror("connect");
+                exit(-1);
+        }
+        printf("connect Ok\n");
+
+        strcpy(buff,"hello");
+        bytes = send(sockfd,buff,sizeof(buff),0);
+        if(bytes<0){
+                perror("send to server");
+                exit(-1);
+        }
+        else{
+                printf("send to server seccess\n");
+        close(sockfd);
+        return 0;
+}
+
+
+====================================================================================================
+
+
+		loopudpserver.c
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,bytes;
+        socklen_t lenth;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_DGRAM,0))==-1){
+                perror("sokcet");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+        while(1){
+                bzero(&buff,max_data_size);
+                lenth = sizeof(struct sockaddr);
+                bytes = recvfrom(sockfd,buff,max_data_size,0,(struct sockaddr*)&cli_addr,&lenth);
+
+                if(bytes<0){
+                        perror("recieve from client");
+                        break;
+                }
+                else if(bytes>0){
+                        printf("client IP %s , port %d , message is : %s\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port),buff);
+                }
+                else{
+                        printf("the other one closed,quit\n");
+                        break;
+                }
+
+        }
+        close(sockfd);
+        return 0;
+}
+
+
+=======================================================================================================
+
+
+		loopudpclient.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<unistd.h>
+#include<errno.h>
+#include<fcntl.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd,bytes;
+        socklen_t lenth;
+        char buff[max_data_size];
+        struct sockaddr_in serv_addr,cli_addr;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
+        serv_addr.sin_port = htons(atoi(argv[2]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_DGRAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket seccess\n");
+/*      
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind seccess\n");
+*/
+        while(1){
+                bzero(&buff,max_data_size);
+                lenth = sizeof(struct sockaddr);
+                printf("send to server('quit' to exit):");
+                fgets(buff,max_data_size,stdin);
+                if(!strncasecmp(buff,"quit",4)){
+                        perror("quit");
+                        break;
+                }
+                bytes = sendto(sockfd,buff,sizeof(buff),0,(struct sockaddr*)&serv_addr,lenth);
+                if(bytes<0){
+                        perror("send to server");
+                        break;
+                }
+                else{
+                        printf("send to server OK\n");
+                }
+        }
+        close(sockfd);
+        return 0;
+}
+
+
+===================================================================================================
+
+
+		udpserver.c
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<string.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<errno.h>
+#include<netdb.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<fcntl.h>
+#define max_data_size 256
+
+void my_fun(char *trans){
+
+        if(trans==NULL){
+                return;
+        }
+        for(;*trans!='\0';trans++){
+                if(*trans>='A'&&*trans<='Z'){
+                        *trans = *trans-'A'+'a';
+                }
+        }
+
+}
+
+int main(int argc,char **argv){
+        int sockfd,recvbytes;
+        socklen_t lenth;
+        struct sockaddr_in serv_addr,cli_addr;
+        char buff[max_data_size];
+        char address[max_data_size];
+        int retn;
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(atoi(argv[1]));
+        bzero(&(serv_addr.sin_zero),8);
+
+        if(argc!=2){
+                perror("enter the port");
+                exit(-1);
+        }
+
+        if((sockfd = socket(AF_INET,SOCK_DGRAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket OK\n");
+        if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(struct sockaddr))==-1){
+                perror("bind");
+                exit(-1);
+        }
+        printf("bind OK\n");
+
+        printf("begin while\n");
+        while(1){
+                lenth = sizeof(struct sockaddr);
+                printf("begin recieve. . .\n");
+                retn = recvfrom(sockfd,buff,max_data_size,0,(struct sockaddr*)&cli_addr,&lenth);
+                printf("retn number is %d\n",retn);
+                if(retn==-1){
+                        perror("recieve failure");
+                        exit(-1);
+                }
+                //inet_ntop(AF_INET,&cli_addr.sin_addr,addr_p,sizeof(addr_p));
+                printf("client IP is %s , port is %d\n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port));
+                printf("content is %s\n",buff);
+                my_fun(buff);
+                retn = sendto(sockfd,buff,strlen(buff)+1,0,(struct sockaddr*)&cli_addr,lenth);
+                if(retn==-1){
+                        perror("send failure\n");
+                        exit(-1);
+                }
+                printf("send to udp client OK\n");
+        }
+
+        close(sockfd);
+        return 0;
+}
+
+
+		udpclient.c
+
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<fcntl.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+#include<errno.h>
+#include<netdb.h>
+#define max_data_size 256
+int main(int argc,char **argv){
+        int sockfd;
+        char buff[max_data_size];
+        int retn;
+        socklen_t lenth;
+        struct sockaddr_in serv_addr,cli_addr;
+
+        cli_addr.sin_family = AF_INET;
+        cli_addr.sin_addr.s_addr = inet_addr(argv[1]);
+        cli_addr.sin_port = htons(atoi(argv[2]));
+        bzero(&(cli_addr.sin_zero),8);
+
+        if((sockfd = socket(AF_INET,SOCK_DGRAM,0))==-1){
+                perror("socket");
+                exit(-1);
+        }
+        printf("socket OK\n");
+        strcpy(buff,"hello WORLD this is FRANK");
+        retn = sendto(sockfd,buff,strlen(buff)+1,0,(struct sockaddr*)&cli_addr,sizeof(cli_addr));
+        printf("retn number is %d\n",retn);
+        if(retn==-1){
+                perror("send failure");
+                exit(-1);
+        }
+        lenth = sizeof(serv_addr);
+        retn = recvfrom(sockfd,buff,max_data_size,0,(struct sockaddr*)&serv_addr,&lenth);
+        if(retn==-1){
+                perror("recieve failure");
+                exit(-1);
+        }
+
+        printf("the server response msg is %s\n",buff);
+        close(sockfd);
+        return 0;
+}
+

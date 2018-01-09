@@ -1,0 +1,310 @@
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<sys/wait.h>
+#include<errno.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+int main(int argc,char **argv){
+    int pid;
+    int status;
+    pid=vfork();
+    if(pid<0){
+	perror("fork()");
+	return 0;
+    }
+    else if(pid==0){
+	char *str1 = "Software Design 3 - Xu Zhenkui - 1615925215";
+	FILE *fp;
+	if((fp=fopen("file1","w+"))==NULL){
+	    perror("open file1");
+	}
+	chmod("file1",0644);
+	fputs(str1,fp);
+	fclose(fp);
+	exit(0);
+    }
+    else{
+	FILE *fp1;
+	if((fp1=fopen("file1","r+"))==NULL){
+	    perror("open file1");
+	}
+	char *str2 = (char*)malloc(43*sizeof(char));
+	fgets(str2,43,fp1);
+	pid = wait(&status);
+	puts(str2);
+	printf("Child pid %d,Status %d\n",pid,status);
+	fclose(fp1);
+    }
+
+    return 0;
+}
+
+
+
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<sys/wait.h>
+#include<fcntl.h>
+#include<errno.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(int argc,char **argv){
+    int pid,n;
+    pid = fork();
+    if(pid<0){
+        perror("fork() ");
+	return 0;
+    }
+    else if(pid==0){
+        printf("fork Child pid:%d,n=%d\n",getpid(),++n);
+    	exit(0);
+    }
+    else{
+		sleep(1);
+        printf("fork Parents pid:%d,n=%d\n\n",getpid(),n);
+    }
+
+    pid = vfork();
+    if(pid<0){
+	perror("vfork() ");
+	return 0;
+    }
+    else if(pid==0){
+	printf("vfork Child pid:%d,n=%d\n",getpid(),++n);
+    	exit(0);
+    }
+    else{
+	printf("vfork Parents pid:%d,n=%d\n",getpid(),n);
+    }
+    return 0;
+}
+
+
+
+#include<sys/wait.h>
+#include<unistd.h>
+#include<stdio.h>
+#include<stdlib.h>
+void cpexit(void){
+    printf("Child process exited!\n");
+    printf("Child pid:%d,Parent pid:%d\n",getpid(),getppid());
+        int fk;
+        if((fk=fork())<0){
+                perror("fork in child:");
+                exit(-1);
+        }
+        else if(fk==0){
+
+                char *env;
+                setenv("user","root",1);
+                env=getenv("user");
+        printf("before: %s\n",env);
+                setenv("user","zhangsan",1);
+                env = getenv("user");
+                printf("later: %s\n",env);
+                exit(0);
+        }else{
+                sleep(1);
+        }
+}
+int main(){
+    int pid;
+    pid = vfork();
+    if(pid<0){
+        perror("vfork()");
+    }
+    else if(pid==0){
+        if(execl("/home/localhost/Documents/FILE/dir6/test1","./test1",NULL)<0){
+                perror("execl");
+                }
+                exit(0);
+    }
+    else{
+                sleep(1);
+                atexit(cpexit);
+                sleep(1);
+    }
+    return 0;
+}
+
+
+
+
+#include<sys/types.h>
+#include<sys/wait.h>
+#include<errno.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(int argc,char **argv){
+    int pid,status;
+    int ret_pid;
+    pid = vfork();
+    if(pid<0){
+        perror("vfork()");
+    }
+    else if(pid==0){
+        printf("Child pid:%d\n",getpid());
+        exit(0);
+    }
+    else{
+		sleep(1);
+        	ret_pid = wait(&status);
+		printf("Parent pid:%d;\nStatus:%d;\nChild return pid:%d;\n",getpid(),status,ret_pid);
+		if(WIFEXITED(status)){
+	    	printf("wait on pid:%d,  normal exit,return value is:%d\n",ret_pid,WEXITSTATUS(status));
+		}
+		else if(WIFSIGNALED(status)){
+	    	printf("wait on pid:%d,  recieve signal,return value is:%d\n",ret_pid,WIFSIGNALED(status));
+		}
+    }
+    return 0;
+}
+
+
+
+
+#include<sys/types.h>
+#include<sys/wait.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(int argc,char **argv){
+    int pid;
+    pid = vfork();
+    if(pid<0){
+        perror("vfork()");
+    }
+    else if(pid==0){
+        printf("Child pid:%d  Parent pid:%d\n",getpid(),getppid());  //orphan_p
+	sleep(2);
+        printf("Child pid:%d  Parent pid:%d\n",getpid(),getppid());
+    }
+    else{
+        exit(0);
+    }
+    return 0;
+}
+
+
+
+
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(){
+    int pid;
+    pid = vfork();
+    if(pid<0){
+        perror("vfork()");
+    }
+    else if(pid==0){
+        printf("Child pid:%d  Parent pid:%d\n",getpid(),getppid());  //zoomb process (defunct)
+        exit(0);
+    }
+
+    else{
+        sleep(3);
+	system("ps");
+	exit(0);
+    }
+    return 0;
+}
+
+
+
+#include<sys/wait.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<errno.h>
+int main(){
+	int pid,ret_pid,status,tmp;
+	pid = vfork();
+	if(pid<0){
+		perror("vfork()");
+	}
+	else if(pid==0){
+		tmp = getpid();
+		printf("Child pid:%d,Parent pid:%d\n",getpid(),getppid());
+		exit(0);	
+	}
+
+	else{
+		//sleep(1);		// child process run greater, parent process sleep;
+		
+		printf("continue...\n");
+		ret_pid = wait(&status);		//wait any child process exit, child process exit status return 0, return exit child pid;
+
+		//ret_pid = waitpid(tmp,&status,WNOHANG);    //no child exit return 0, or return child pid;
+
+		printf("return pid:%d,status:%d\n",ret_pid,status);
+		
+	}
+
+	return 0;
+}
+
+
+
+#include<sys/wait.h>
+#include<unistd.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
+void test(void){
+	int pid;
+	pid = vfork();
+	if(pid<0){
+		perror("vfork()");
+		exit(EXIT_FAILURE);
+	}
+	else if(pid==0){
+		printf("1:  Child pid:%d,Parent pid:%d\n",getpid(),getppid());
+		return;
+	}
+	else{
+		
+		printf("2:  Child pid:%d,Parent pid:%d\n",getpid(),getppid());
+	}
+}
+
+void fun(void){
+	int buf[100];
+	memset(buf,'\0',100);
+	printf("3:  Child pid:%d,Parent pid:%d\n",getpid(),getppid());
+}
+
+int main(){
+	test();    // parent process shared stack with child process, the stack space is cleared when child process have been exited ;
+
+	fun();	   // run fun(), cover previous stack space
+	
+	// when child process exit, parent process continue run at where vfork() return, but the stack space not exited, result Stack Error 
+	return 0;    
+
+}
+
+
+
+#include<sys/stat.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<stdio.h>
+int main(){
+	int i;
+
+	if((i=access("test1.c",F_OK | R_OK | W_OK))==-1){
+		perror("access test1.c");
+		exit(EXIT_FAILURE);
+	}
+	else{
+		printf("Access test1.c OK\n");
+	}
+	return 0;
+}
